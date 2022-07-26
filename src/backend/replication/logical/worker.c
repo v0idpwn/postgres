@@ -1483,22 +1483,20 @@ apply_handle_update_internal(ApplyExecutionData *edata,
 
 		EvalPlanQualSetSlot(&epqstate, remoteslot);
 
-		/* Do the actual update. */
 		ExecSimpleRelationUpdate(relinfo, estate, &epqstate, localslot,
 								 remoteslot);
 	}
 	else
 	{
 		/*
-		 * The tuple to be updated could not be found.  Do nothing except for
-		 * emitting a log message.
-		 *
-		 * XXX should this be promoted to ereport(LOG) perhaps?
+		 * The tuple to be updated could not be found. Instead, we do an insert
 		 */
-		elog(DEBUG1,
-			 "logical replication did not find row to be updated "
-			 "in replication target relation \"%s\"",
-			 RelationGetRelationName(localrel));
+		elog(DEBUG1, "tuple not found, inserting instead");
+ 		oldctx = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
+ 		slot_store_data(remoteslot, relmapentry, newtup);
+ 		slot_fill_defaults(relmapentry, estate, remoteslot);
+ 		MemoryContextSwitchTo(oldctx);
+ 		ExecSimpleRelationInsert(relinfo, estate, remoteslot);
 	}
 
 	/* Cleanup. */
